@@ -1,0 +1,59 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Sep 12 16:50:23 2019
+# The code quote from the book named 《Python数据分析与挖掘实战》,and the code was used for my work dealing how to sort the customer data. 
+@author: bin
+"""
+import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+datafile = 'C:/Users/bin/Desktop/文件包/Mysql学习包/\
+  Python数据分析与挖掘实战/chapter7/demo/data/air_data.csv' #导入数据
+f = open(datafile,encoding = 'utf-8') #中文录进不能直接写入
+df = pd.read_csv(f,encoding = 'utf-8')
+#####数据探索####
+explore = df.describe(percentiles = [],include = 'all').T  #描述各个字段的统计数据
+explore['null'] = len(df)-explore['count']  #计算每个字段空值
+explore_2 = explore[['null','max','min']]
+df = df[df['SUM_YR_1'].notnull()*df['SUM_YR_2'].notnull()] #保留票价为非空值的数据，其他的数据去掉
+#保留票价非0，或平均折扣率与总飞行公里数同时为0的
+index1 = df['SUM_YR_1'] != 0
+index2 = df['SUM_YR_2'] != 0
+index3 = (df['SEG_KM_SUM'] == 0) & (df['avg_discount'] == 0)
+df = df[index1|index2|index3] #该规则是或
+df2 = pd.DataFrame(df,columns={'FFP_DATE','LOAD_TIME','FLIGHT_COUNT','avg_discount',
+         'SEG_KM_SUM','LAST_TO_END'})
+####################################################
+#构造属性
+d_LOAD = pd.to_datetime(df2['LOAD_TIME'])
+d_FFP = pd.to_datetime(df2['FFP_DATE'])
+res = d_LOAD - d_FFP
+df2['L'] = res.map(lambda x:x/np.timedelta64(30*24*60,'m'))
+df2 = df2.rename(columns={"LAST_TO_END":"R","FLIGHT_COUNT":"F","SEG_KM_SUM":"M",\
+                    "avg_discount":"C"},inplace = False)
+df2 = df2.drop(labels = ['LOAD_TIME','FFP_DATE'],axis = 1)#删掉原始字段
+##属性构造完毕，开始标准化
+df2 = (df2 - df2.mean(axis = 0))/(df2.std(axis = 0))#线性变换
+#开始聚类
+kmodel = KMeans(n_clusters = 5,n_jobs = 4)
+kmodel.fit(df2)
+######将聚类后的结果制作成表,导出分析##############
+r1 = kmodel.labels_  #各样本对应的类别（依照聚类结果打标签）
+r2 = kmodel.cluster_centers_ #查看各类别的中心
+r3_AGG = pd.DataFrame(r1,columns = ['聚类后的类别'])
+r3_Sort = r3_AGG.groupby(by = ['聚类后的类别'])['聚类后的类别']
+r3 = r3_Sort.agg([('1','count')])#五个类各自的样本数'
+r2_pd = pd.DataFrame(r2,columns = ['0','1','2','3','4'])
+r3 = r3.rename(columns = {"1":"类别数据个数"},inplace = False)
+r_result = pd.concat([r3,r2_pd],axis = 1)
+r_result = r_result.rename(columns = {'0':'ZC','1':'ZF','2':'ZM','3':'ZR','4':'ZL'},inplace = False)
+r_result.to_excel('C:/Users/bin/Desktop/文件包/Mysql学习包/Python数据分析与挖掘实战/chapter7/demo/data/air_data_result.xlsx')
+
+
+
+
+
+
+
+
+
